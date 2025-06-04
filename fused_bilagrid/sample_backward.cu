@@ -3,7 +3,6 @@
 #define COMPUTE_COORDS_GRAD
 #include "sample_backward_kernel.cu"
 
-
 void bilagrid_sample_backward(
     const float* bilagrid,
     const float* coords,
@@ -15,22 +14,20 @@ void bilagrid_sample_backward(
     int N, int L, int H, int W,
     int m, int h, int w
 ) {
-    dim3 block = { 16, 16, 1 };
-    dim3 bounds = {
-        (w +block.x-1)/block.x,
-        (h +block.y-1)/block.y,
-        (N*m +block.z-1)/block.z
-    };
-    // only 2% speed difference, the slowest part is likely 12x8 atomicAdd
+    // Use 1D grid for better load balancing
+    int threads = 256;
+    int total = N * m * h * w;
+    int blocks = min((total + threads - 1) / threads, 65535);
+    
     if (v_coords == nullptr) {
-        bilagrid_sample_backward_kernel<<<bounds, block>>>(
+        bilagrid_sample_backward_kernel<<<blocks, threads>>>(
             bilagrid, coords, rgb, v_output,
             v_bilagrid, v_rgb,
             N, L, H, W, m, h, w
         );
     }
     else {
-        bilagrid_sample_backward_kernel_cg<<<bounds, block>>>(
+        bilagrid_sample_backward_kernel_cg<<<blocks, threads>>>(
             bilagrid, coords, rgb, v_output,
             v_bilagrid, v_coords, v_rgb,
             N, L, H, W, m, h, w
